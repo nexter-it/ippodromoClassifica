@@ -344,13 +344,13 @@ class UDPServer:
         for idx, (horse_id, horse_data) in enumerate(sorted_horses):
             distance = horse_data['distance']
             meters_covered = horse_data['meters_covered']
-            y_coordinate = horse_data['y']
+            y_coordinate = horse_data['metriCorsiaDelCavallo']
             if idx < len(sorted_horses) - 1:
                 next_distance = sorted_horses[idx + 1][1]['distance']
                 gap = distance - next_distance
-                packet += f",({horse_id},{gap:.2f},{meters_covered},{y_coordinate:.2f})"
+                packet += f",({horse_id},{gap:.2f},{total_race_meters - meters_covered},{y_coordinate:.2f})"
             else:
-                packet += f",({horse_id},last one,{meters_covered},{y_coordinate:.2f})"
+                packet += f",({horse_id},last one,{total_race_meters - meters_covered},{y_coordinate:.2f})"
         print(packet)
 
         # Invia il pacchetto UDP all'indirizzo specificato
@@ -366,9 +366,9 @@ class UDPServer:
             if idx < len(sorted_horses) - 1:
                 next_distance = sorted_horses[idx + 1][1]['distance']
                 gap = distance - next_distance
-                print(f"{idx + 1}. Cavallo {horse_id}: {distance:.2f} settore ({laps_completed} giri), {meters_covered}m percorsi, Corsia: {metriCorsiaDelCavallo:.2f}m -> {gap:.2f}m di gap")
+                print(f"{idx + 1}. Cavallo {horse_id}: {distance:.2f} settori ({laps_completed} giri), {total_race_meters - meters_covered}m al traguardo, Corsia: {metriCorsiaDelCavallo:.2f}m -> {gap:.2f}m di gap")
             else:
-                print(f"{idx + 1}. Cavallo {horse_id}: {distance:.2f} settore ({laps_completed} giri), {meters_covered}m percorsi, Corsia: {metriCorsiaDelCavallo:.2f}m -> last one")
+                print(f"{idx + 1}. Cavallo {horse_id}: {distance:.2f} settori ({laps_completed} giri), {total_race_meters - meters_covered}m al traguardo, Corsia: {metriCorsiaDelCavallo:.2f}m -> last one")
         print("\n")
 
 # ==========================
