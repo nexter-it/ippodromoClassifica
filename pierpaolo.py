@@ -176,7 +176,7 @@ def generate_track_segments():
                 segments.append(create_segment(len(segments), start_x, start_y, end_x, end_y, cumulative_distance))
 
     print(f"Total cumulative distance: {cumulative_distance} meters")
-    return segments
+    return segments, cumulative_distance
 
 def create_segment(index, x1, y1, x2, y2, cumulative_distance):
     """
@@ -205,7 +205,7 @@ def create_segment(index, x1, y1, x2, y2, cumulative_distance):
 # ==========================
 
 class UDPServer:
-    def __init__(self, listen_ip, listen_port, segments, ZeroLati, ZeroLong, mxmLati, mxmLong, vCosRotIpp, vSinRotIpp, race_started_event):
+    def __init__(self, listen_ip, listen_port, segments, ZeroLati, ZeroLong, mxmLati, mxmLong, vCosRotIpp, vSinRotIpp, race_started_event, total_track_length):
         self.listen_ip = listen_ip
         self.listen_port = listen_port
         self.segments = segments
@@ -216,9 +216,10 @@ class UDPServer:
         self.vCosRotIpp = vCosRotIpp
         self.vSinRotIpp = vSinRotIpp
         self.race_started_event = race_started_event
+        self.total_track_length = total_track_length
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.horses = {}  # Dizionario per tenere traccia dei cavalli
-        
+
         # Socket per inviare i pacchetti della classifica
         self.broadcast_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.broadcast_address = ('0.0.0.0', 4141)
@@ -245,16 +246,19 @@ class UDPServer:
 
     def process_packet(self, data, addr):
         data_str = data.decode('utf-8').strip()
+        # print(data_str)
         if not self.race_started_event.is_set():
-            if data_str.strip().upper() == "START":
+            if "START" in data_str.upper():
                 self.horses = {}  # Resetta le informazioni dei cavalli
                 print("[INFO] Comando di avvio ricevuto. Inizio della gara!")
                 self.race_started_event.set()
-                return
-            else:
-                # Non è il comando di avvio, continua ad aspettare
-                return
+            return
         else:
+            if "END" in data_str.upper():
+                print("[INFO] Comando di fine gara ricevuto. Fine della gara!")
+                self.horses = {}  # Resetta le informazioni dei cavalli
+                self.race_started_event.clear()
+                return
             # Se la gara è iniziata, processa i pacchetti GPS
             try:
                 parts = data_str.split(',')
@@ -290,31 +294,47 @@ class UDPServer:
                     cumulative_distance = closest_segment['cumulative_distance']
                     total_distance = cumulative_distance + segment_progress
 
+                    # Calcola metriCorsiaDelCavallo
+                    metriCorsiaDelCavallo = math.hypot(xCav - closest_segment['x1'], yCav - closest_segment['y1'])
+
                     # Aggiorna le informazioni del cavallo
                     horse = self.horses.get(horse_id, {
                         'distance': 0.0,
                         'x': 0.0,
                         'y': 0.0,
-                        'meters_covered': 0,        # Initialize meters_covered
-                        'last_segment': None        # Initialize last_segment
+                        'laps_completed': 0,
+                        'prev_distance': 0.0,
+                        'meters_covered': 0,
+                        'last_segment': None,
+                        'metriCorsiaDelCavallo': 0.0
                     })
+
+                    # Verifica se il cavallo ha completato un giro
+                    if total_distance < horse['prev_distance'] and (horse['prev_distance'] - total_distance) > (self.total_track_length / 2):
+                        horse['laps_completed'] += 1
+
+                    horse['prev_distance'] = total_distance
+
+                    # Calcola la distanza totale con i giri inclusi
+                    total_distance_with_laps = horse['laps_completed'] * self.total_track_length + total_distance
 
                     # Check if the horse has moved to a new segment
                     if closest_segment['s'] != horse.get('last_segment'):
                         horse['meters_covered'] += 1  # Increment meters_covered by 1
                         horse['last_segment'] = closest_segment['s']  # Update the last_segment
 
-                    horse['distance'] = total_distance
+                    horse['distance'] = total_distance_with_laps
                     horse['x'] = xCav
-                    horse['y'] = yCav
+                    horse['y'] = yCav # PARAMETRO NUOVO YYYYYY
+                    horse['metriCorsiaDelCavallo'] = metriCorsiaDelCavallo  # PARAMETRO NUOVO CORSIA CAVALLO
                     self.horses[horse_id] = horse
 
                     # Aggiorna, stampa e invia la classifica
                     self.send_rankings()
-                    
+
             except Exception as e:
                 print(f"Errore nell'elaborazione dei dati da {addr}: {data_str}\n{e}")
-    
+
     def send_rankings(self):
         # Ordina i cavalli per distanza percorsa in ordine decrescente
         sorted_horses = sorted(self.horses.items(), key=lambda x: x[1]['distance'], reverse=True)
@@ -340,12 +360,14 @@ class UDPServer:
         for idx, (horse_id, horse_data) in enumerate(sorted_horses):
             distance = horse_data['distance']
             meters_covered = horse_data['meters_covered']
+            laps_completed = horse_data['laps_completed']
+            metriCorsiaDelCavallo = horse_data['metriCorsiaDelCavallo']
             if idx < len(sorted_horses) - 1:
                 next_distance = sorted_horses[idx + 1][1]['distance']
                 gap = distance - next_distance
-                print(f"{idx + 1}. Cavallo {horse_id}: {distance:.2f} metri, {meters_covered}m percorsi -> {gap:.2f}m di gap")
+                print(f"{idx + 1}. Cavallo {horse_id}: {distance:.2f} metri ({laps_completed} giri), {meters_covered}m percorsi, Corsia: {metriCorsiaDelCavallo:.2f}m -> {gap:.2f}m di gap")
             else:
-                print(f"{idx + 1}. Cavallo {horse_id}: {distance:.2f} metri, {meters_covered}m percorsi -> last one")
+                print(f"{idx + 1}. Cavallo {horse_id}: {distance:.2f} metri ({laps_completed} giri), {meters_covered}m percorsi, Corsia: {metriCorsiaDelCavallo:.2f}m -> last one")
         print("\n")
 
 # ==========================
@@ -354,30 +376,10 @@ class UDPServer:
 
 def main():
     # Genera i segmenti del tracciato
-    segments = generate_track_segments()
+    segments, total_track_length = generate_track_segments()
 
     # Calcola i valori dinamici dei metri per millesimo di grado
     mxmLati, mxmLong = calculate_meters_per_degree(ZeroLati)
-    
-    # Stampa le coordinate in formato JavaScript
-    # print("\nconst trackSegments = [")
-    # for seg in segments:
-    #     x1 = seg['x1']
-    #     y1 = seg['y1']
-    #     x2 = seg['x2']
-    #     y2 = seg['y2']
-
-    #     # Converti le coordinate locali in coordinate GPS
-    #     start_lat, start_lng = convert_local_to_gps(
-    #         x1, y1, ZeroLati, ZeroLong, mxmLati, mxmLong, vCosRotIpp, vSinRotIpp
-    #     )
-    #     end_lat, end_lng = convert_local_to_gps(
-    #         x2, y2, ZeroLati, ZeroLong, mxmLati, mxmLong, vCosRotIpp, vSinRotIpp
-    #     )
-
-    #     # Stampa in formato richiesto
-    #     print(f"  {{ start: {{ lat: {start_lat}, lng: {start_lng} }}, end: {{ lat: {end_lat}, lng: {end_lng} }} }},")
-    # print("];\n")
 
     # Crea un evento per tracciare se la gara è iniziata
     race_started_event = threading.Event()
@@ -387,14 +389,15 @@ def main():
     UDP_PORT = 4040
     udp_server = UDPServer(
         UDP_IP, UDP_PORT, segments, ZeroLati, ZeroLong, mxmLati, mxmLong, vCosRotIpp, vSinRotIpp,
-        race_started_event
+        race_started_event, total_track_length
     )
     udp_server.start()
 
     # Thread per stampare "Waiting for starting command..." finché non arriva "START"
     def waiting_for_start():
-        while not race_started_event.is_set():
-            print("Waiting for starting command...")
+        while True:
+            if not race_started_event.is_set():
+                print("Waiting for starting command...")
             time.sleep(5)  # Attende 5 secondi prima di stampare nuovamente
 
     waiting_thread = threading.Thread(target=waiting_for_start)
