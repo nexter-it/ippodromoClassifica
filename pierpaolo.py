@@ -219,6 +219,7 @@ class UDPServer:
         self.total_track_length = total_track_length
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.horses = {}  # Dizionario per tenere traccia dei cavalli
+        self.race_start_time = None
 
         # Socket per inviare i pacchetti della classifica
         self.broadcast_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -252,12 +253,14 @@ class UDPServer:
                 self.horses = {}  # Resetta le informazioni dei cavalli
                 print("[INFO] Comando di avvio ricevuto. Inizio della gara!")
                 self.race_started_event.set()
+                self.race_start_time = time.time() # parte il timer
             return
         else:
             if "END" in data_str.upper():
                 print("[INFO] Comando di fine gara ricevuto. Fine della gara!")
                 self.horses = {}  # Resetta le informazioni dei cavalli
                 self.race_started_event.clear()
+                self.race_start_time = None
                 return
             # Se la gara è iniziata, processa i pacchetti GPS
             try:
@@ -273,6 +276,7 @@ class UDPServer:
                 horse_id = parts[1].strip()
                 CavLati = float(parts[2].strip())
                 CavLong = float(parts[3].strip())
+                horseSpeed = float(parts[6].strip()) * 3.6
 
                 # Converti le coordinate GPS in coordinate locali
                 xCav, yCav = convert_gps_to_local(
@@ -306,7 +310,9 @@ class UDPServer:
                         'prev_distance': 0.0,
                         'meters_covered': 0,
                         'last_segment': None,
-                        'metriCorsiaDelCavallo': 0.0
+                        'metriCorsiaDelCavallo': 0.0,
+                        'horseSpeed': 0.0,
+                        'start_time': time.time()
                     })
 
                     # Verifica se il cavallo ha completato un giro
@@ -314,6 +320,9 @@ class UDPServer:
                         horse['laps_completed'] += 1
 
                     horse['prev_distance'] = total_distance
+                    
+                    # Aggiorno velocità
+                    horse['horseSpeed'] = horseSpeed
 
                     # Calcola la distanza totale con i giri inclusi
                     total_distance_with_laps = horse['laps_completed'] * self.total_track_length + total_distance
@@ -345,12 +354,22 @@ class UDPServer:
             distance = horse_data['distance']
             meters_covered = horse_data['meters_covered']
             y_coordinate = horse_data['metriCorsiaDelCavallo']
+            horseSpeed = horse_data['horseSpeed']
+            
+            elapsed_time = time.time() - horse_data['start_time']
+            if elapsed_time >= 60:
+                minutes = int(elapsed_time) // 60
+                seconds = int(elapsed_time) % 60
+                elapsed_time_formatted = f"{minutes}m {seconds}s"
+            else:
+                elapsed_time_formatted = f"{int(elapsed_time)}s"
+            
             if idx < len(sorted_horses) - 1:
                 next_distance = sorted_horses[idx + 1][1]['distance']
                 gap = distance - next_distance
-                packet += f",({horse_id},{gap:.2f},{total_race_meters - meters_covered},{y_coordinate:.2f})"
+                packet += f",({horse_id},{gap:.2f},{total_race_meters - meters_covered},{y_coordinate:.2f},{horseSpeed:.2f},{elapsed_time_formatted})"
             else:
-                packet += f",({horse_id},last one,{total_race_meters - meters_covered},{y_coordinate:.2f})"
+                packet += f",({horse_id},last one,{total_race_meters - meters_covered},{y_coordinate:.2f},{horseSpeed:.2f},{elapsed_time_formatted})"
         print(packet)
 
         # Invia il pacchetto UDP all'indirizzo specificato
