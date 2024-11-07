@@ -297,8 +297,8 @@ while running:
         meters_to_finish_first_horse = int(computed_meters_to_finish[first_horse['horse_id']])
 
         # Define box dimensions
-        box_width = 200
-        box_height = 100
+        box_width = 203
+        box_height = 75
         box_x = WINDOW_WIDTH - box_width - 10  # Bottom right corner
         box_y = WINDOW_HEIGHT - box_height - 10
 
@@ -319,8 +319,8 @@ while running:
         screen.blit(meters_text, meters_rect)
 
         # Draw the "velocità in testa" box for the first horse's speed
-        speed_box_width = 200
-        speed_box_height = 100
+        speed_box_width = 203
+        speed_box_height = 75
         speed_box_x = box_x - speed_box_width - 10  # Positioned to the left with 10 pixels spacing
         speed_box_y = box_y  # Same y as the "AL TRAGUARDO" box
 
@@ -342,8 +342,8 @@ while running:
         screen.blit(speed_display_text, speed_rect)
         
         # Draw the "TEMPO" box for the first horse's time
-        time_box_width = 200
-        time_box_height = 100
+        time_box_width = 203
+        time_box_height = 75
         time_box_x = speed_box_x - time_box_width - 10  # Positioned to the left of the "VELOCITÀ IN TESTA" box
         time_box_y = box_y  # Same y as the other boxes
 
@@ -366,7 +366,7 @@ while running:
 
         # Draw the finish line when appropriate
         FINISH_LINE_THRESHOLD = 150  # Show finish line when within 150 meters
-        if meters_to_finish_first_horse <= FINISH_LINE_THRESHOLD and meters_to_finish_first_horse > -100:
+        if meters_to_finish_first_horse <= FINISH_LINE_THRESHOLD and meters_to_finish_first_horse > -300:
             finish_line_x = TRACK_START_X + SCALE * (max_meters_to_finish - 0 + MARGIN_DISTANCE)
             # Ensure the finish line does not go beyond the track end
             if finish_line_x <= TRACK_END_X:
