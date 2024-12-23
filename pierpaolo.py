@@ -380,7 +380,7 @@ class UDPServer:
             leader_id, leader_data = sorted_horses[0]
             leader_x = leader_data['x']
             leader_y = leader_data['y']
-            tel_packet = f"TEL,{leader_x:.2f},{leader_y:.2f}"
+            tel_packet = f"POS1,{leader_x:.2f},{leader_y:.2f}"
             self.broadcast_sock.sendto(tel_packet.encode('utf-8'), self.broadcast_address)
 
 
