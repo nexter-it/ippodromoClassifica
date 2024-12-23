@@ -374,6 +374,15 @@ class UDPServer:
 
         # Invia il pacchetto UDP all'indirizzo specificato
         self.broadcast_sock.sendto(packet.encode('utf-8'), self.broadcast_address)
+        
+        # Subito dopo, invia il pacchetto TEL
+        if len(sorted_horses) > 0:
+            leader_id, leader_data = sorted_horses[0]
+            leader_x = leader_data['x']
+            leader_y = leader_data['y']
+            tel_packet = f"TEL,{leader_x:.2f},{leader_y:.2f}"
+            self.broadcast_sock.sendto(tel_packet.encode('utf-8'), self.broadcast_address)
+
 
         # Stampa la classifica per debug con il gap tra i cavalli e i metri percorsi
         print("\nClassifica attuale:")
